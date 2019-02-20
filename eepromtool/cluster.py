@@ -1,11 +1,12 @@
 import logging
 from .eepromtool import eeprom
 
+
 class clustereeprom:
     bin_type = "Cluster"
     noCheckSumPages = [0x10000]
     backupPage = [0x10000]
-    write = False #set to write out eeprom after modification
+    write = False  # set to write out eeprom after modification
 
     size = 0
     data = []
@@ -14,29 +15,30 @@ class clustereeprom:
     vindetail = ""
     immoid = ""
     skc = ""
-    clustercode = "" #0x34-0x3A
+    clustercode = ""  # 0x34-0x3A
     clustertype = ""
     clusterpartnumberstring = ""
     mileage = ""
     softcoding = ""
     checksum = ""
 
-
-    def __init__(self,ndata):
+    def __init__(self, ndata):
         logging.warn("Parsing as cluster eeprom")
         self.data = ndata
         self.parse()
 
     def parse(self):
 
-        #set length
+        # set length
         self.size = 0
         for page in self.data:
             self.size += len(page)
-            if len(page) > 16: logging.error("ERROR, long row: %d " % len(page))
-            elif len(page) < 16: logging.error("ERROR, short row: %d " % len(page))
+            if len(page) > 16:
+                logging.error("ERROR, long row: %d " % len(page))
+            elif len(page) < 16:
+                logging.error("ERROR, short row: %d " % len(page))
 
-        #get cluster code
+        # get cluster code
         cc1 = self.data[0x7][0x2:0x9]
         cc2 = self.data[0x7][0xA:0x18]
         cc2.append(self.data[0x8][0x0])
@@ -51,16 +53,19 @@ class clustereeprom:
                 logging.info("Cluster Code Block match for TT Cluster")
                 self.clustertype = '8N'
         elif self.size < 1024:
-            self.clustertype='v1'
+            self.clustertype = 'v1'
 
         if self.clustertype == '':
             if cc1 != cc2:
-                logging.warn("WARNING: Cluster Code Block 1 and 2 do not match, this may indicate an error in the file, or a format not supported by this tool")
+                logging.warn(
+                    "WARNING: Cluster Code Block 1 and 2 do not match, this may indicate an error in the file, or a format not supported by this tool")
             if cc1 != cc3:
-                logging.warn("WARNING: Cluster Code Block 1 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
+                logging.warn(
+                    "WARNING: Cluster Code Block 1 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
             if cc2 != cc3:
-                logging.warn("WARNING: Cluster Code Block 2 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
-        
+                logging.warn(
+                    "WARNING: Cluster Code Block 2 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
+
         self.clustercode = ""
         if self.clustertype == '8N':
             for i in range(0xb, 0xf):
@@ -71,90 +76,92 @@ class clustereeprom:
             for i in range(0x2, 0x9):
                 self.clustercode += "%0.2X " % self.data[0x7][i]
 
-        #get SKC
+        # get SKC
         if self.clustertype == '8N':
-            hexskc = "%0.2x%0.2x" % (self.data[0x35][0xB],self.data[0x35][0xC])
-            self.skc = "0%d" % int(hexskc,16)
+            hexskc = "%0.2x%0.2x" % (
+                self.data[0x35][0xB], self.data[0x35][0xC])
+            self.skc = "0%d" % int(hexskc, 16)
         elif self.clustertype == 'R32':
-            hexskc = "%0.2x%0.2x" % (self.data[0x10][0xB],self.data[0x10][0xA])
-            self.skc = "0%d" % int(hexskc,16)
+            hexskc = "%0.2x%0.2x" % (
+                self.data[0x10][0xB], self.data[0x10][0xA])
+            self.skc = "0%d" % int(hexskc, 16)
         else:
-            hexskc = "%0.2x%0.2x" % (self.data[0xC][0xD],self.data[0xC][0xC])
-            self.skc = "0%d" % int(hexskc,16)
-        #get clusterpartnumber
+            hexskc = "%0.2x%0.2x" % (self.data[0xC][0xD], self.data[0xC][0xC])
+            self.skc = "0%d" % int(hexskc, 16)
+        # get clusterpartnumber
         clusterpartnumber = bytearray()
         if self.clustertype == '8N':
-            for bite in range (0x0C,0x10):
+            for bite in range(0x0C, 0x10):
                 clusterpartnumber.append(self.data[0x22][bite])
-            for bite in range (0x00,0x06):
+            for bite in range(0x00, 0x06):
                 clusterpartnumber.append(self.data[0x23][bite])
         elif self.clustertype == 'R32':
-            for bite in range (0x0A,0x10):
+            for bite in range(0x0A, 0x10):
                 clusterpartnumber.append(self.data[0x15][bite])
-            for bite in range (0x00,0x06):
+            for bite in range(0x00, 0x06):
                 clusterpartnumber.append(self.data[0x16][bite])
         elif self.clustertype == 'v1':
-            for bite in range (0x00,0x3):
+            for bite in range(0x00, 0x3):
                 clusterpartnumber.append(self.data[0x8][bite])
             for bite in bytearray(b"919"):
                 clusterpartnumber.append(bite)
-            for bite in range (0x03,0x10):
+            for bite in range(0x03, 0x10):
                 clusterpartnumber.append(self.data[0x8][bite])
         else:
-            for bite in range (0x0A,0x10):
+            for bite in range(0x0A, 0x10):
                 clusterpartnumber.append(self.data[0x15][bite])
-            for bite in range (0x00,0x06):
+            for bite in range(0x00, 0x06):
                 clusterpartnumber.append(self.data[0x16][bite])
         try:
             self.clusterpartnumberstring = clusterpartnumber.decode('ascii')
         except:
             logging.warn("WARNING: cannot decode Cluster Part number")
 
-        #get VIN
+        # get VIN
         vinstring = bytearray()
         if self.clustertype == '8N':
-            for bite in range (0x02,0x10):
+            for bite in range(0x02, 0x10):
                 vinstring.append(self.data[0xD][bite])
-            for bite in range (0x00,0x03):
+            for bite in range(0x00, 0x03):
                 vinstring.append(self.data[0xE][bite])
         else:
-            for bite in range (0x02,0x10):
+            for bite in range(0x02, 0x10):
                 vinstring.append(self.data[0xD][bite])
-            for bite in range (0x00,0x03):
+            for bite in range(0x00, 0x03):
                 vinstring.append(self.data[0xE][bite])
         try:
             self.vin = vinstring.decode('ascii')
         except:
             logging.warn("WARNING: cannot decode VIN, try setting VIN to fix")
 
-        self.vindetail = eeprom.parsevin(self.vin)
+        self.vindetail = eeprom.parsevin(None, self.vin)
 
-
-        #get Immo ID
+        # get Immo ID
         immostring = bytearray()
         if self.clustertype == '8N':
-            for bite in range (0x0D,0x0F):
+            for bite in range(0x0D, 0x0F):
                 immostring.append(self.data[0x35][bite])
-            for bite in range (0x00,0x0B):
+            for bite in range(0x00, 0x0B):
                 immostring.append(self.data[0x36][bite])
         else:
-            for bite in range (0x02,0x0F):
+            for bite in range(0x02, 0x0F):
                 immostring.append(self.data[0xA][bite])
         try:
             self.immoid = immostring.decode('ascii')
         except:
             logging.warn("WARNING: cannot decode ImmmoID")
 
-    def writebin(self,outputfile):
+    def writebin(self, outputfile):
         outputdata = bytearray()
         for row in self.data:
             count = 0
             for bite in row:
                 count += 1
                 outputdata.append(bite)
-        logging.info("Writing %dkb cluster eeprom bin to: %s" % (len(outputdata),outputfile))
+        logging.info("Writing %dkb cluster eeprom bin to: %s" %
+                     (len(outputdata), outputfile))
         try:
-            with open(outputfile,'wb') as fp:
+            with open(outputfile, 'wb') as fp:
                 fp.write(outputdata)
         except:
             logging.error("Error: Could not open output file, exiting")
@@ -166,7 +173,8 @@ class clustereeprom:
         logging.info("EEPROM Status:")
         logging.info("- Type: %s" % self.bin_type)
         if self.getVINDetail() is not "":
-            logging.info("- VIN: %s (%s)" % (self.getVIN(),self.getVINDetail()))
+            logging.info("- VIN: %s (%s)" %
+                         (self.getVIN(), self.getVINDetail()))
         else:
             logging.info("- VIN: %s" % (self.getVIN()))
         logging.info("- Size: " + self.getLength())
@@ -201,11 +209,13 @@ class clustereeprom:
         if self.size == 2048:
             return "%dbytes" % self.size
         elif self.size/1024 == 512:
-            logging.warn("Size: 512kb - is this a flash bin not an eeprom bin?")
+            logging.warn(
+                "Size: 512kb - is this a flash bin not an eeprom bin?")
             logging.warn("Exiting")
             exit(1)
         elif self.size/1024 == 1024:
-            logging.warn("Size: 1024kb - is this a flash bin not an eeprom bin?")
+            logging.warn(
+                "Size: 1024kb - is this a flash bin not an eeprom bin?")
             logging.warn("Exiting")
             exit(1)
         else:
@@ -214,18 +224,21 @@ class clustereeprom:
     def getSKC(self):
         return self.skc
 
-    def setSKC(self,skc):
-        #sanity check
+    def setSKC(self, skc):
+        # sanity check
         if len(skc) > 5 or len(skc) < 4:
-            logging.error("ERROR: SKC must be in format 0xxxx or xxxx, where x is in range 0-9")
+            logging.error(
+                "ERROR: SKC must be in format 0xxxx or xxxx, where x is in range 0-9")
             exit(1)
         try:
             tmp = int(skc)
         except:
-            logging.error("ERROR: SKC must be in format 0xxxx or xxxx, where x is in range 0-9")
+            logging.error(
+                "ERROR: SKC must be in format 0xxxx or xxxx, where x is in range 0-9")
             exit(1)
         if len(skc) == 5 and skc[0] != "0":
-            logging.error("ERROR: SKC must be in format 0xxxx or xxxx, where x is in range 0-9")
+            logging.error(
+                "ERROR: SKC must be in format 0xxxx or xxxx, where x is in range 0-9")
             exit(1)
 
         if len(skc) == 5:
@@ -234,24 +247,22 @@ class clustereeprom:
             tskc = "%0.4x" % int(skc)
 
         logging.info("Setting SKC to %s" % skc)
-        self.data[0xC][0xC] = int(tskc[2:],16)
-        self.data[0xC][0xD] = int(tskc[:2],16)
-        self.data[0xC][0xE] = int(tskc[2:],16)
-        self.data[0xC][0xF] = int(tskc[:2],16)
-        self.data[0xD][0x0] = int(tskc[2:],16)
-        self.data[0xD][0x1] = int(tskc[:2],16)
-
+        self.data[0xC][0xC] = int(tskc[2:], 16)
+        self.data[0xC][0xD] = int(tskc[:2], 16)
+        self.data[0xC][0xE] = int(tskc[2:], 16)
+        self.data[0xC][0xF] = int(tskc[:2], 16)
+        self.data[0xD][0x0] = int(tskc[2:], 16)
+        self.data[0xD][0x1] = int(tskc[:2], 16)
 
         self.parse()
         self.write = True
 
-
     def getClusterCode(self):
         return self.clustercode
 
-    def setClusterCode(self,clustercode):
+    def setClusterCode(self, clustercode):
 
-        bacc = bytearray(clustercode.replace(" ","").decode("hex"))
+        bacc = bytearray(clustercode.replace(" ", "").decode("hex"))
         self.data[0x7][2:9] = bacc
         self.data[0x7][0xA:18] = bacc[0:6]
         self.data[0x8][0x0] = bacc[6]
@@ -272,14 +283,15 @@ class clustereeprom:
     def getVINDetail(self):
         return self.vindetail
 
-    def setVIN(self,newvin):
-        logging.debug("Trying to set vin to %s (%s)" % (newvin,parsevin(newvin)))
+    def setVIN(self, newvin):
+        logging.debug("Trying to set vin to %s (%s)" %
+                      (newvin, parsevin(newvin)))
         try:
             if len(newvin) is not 17:
                 logging.error("ERROR: VIN number must be 17 characters")
                 exit(1)
             logging.info("Setting VIN to %s" % newvin)
-            bavin = bytearray(newvin,'ascii')
+            bavin = bytearray(newvin, 'ascii')
 
             self.data[0xD][0x02:0x10] = bavin[0x00:0x0E]
             del bavin[0x0:0xE]
@@ -295,14 +307,14 @@ class clustereeprom:
     def getImmoID(self):
         return self.immoid
 
-    def setImmoID(self,immoid):
+    def setImmoID(self, immoid):
         logging.debug("Trying to set immo ID to %s" % immoid)
         try:
             if len(immoid) is not 14:
                 logging.error("ERROR: VIN number must be 14 characters")
                 exit(1)
             logging.info("Setting Immo ID to %s" % immoid)
-            baii = bytearray(immoid,'ascii')
+            baii = bytearray(immoid, 'ascii')
 
             self.data[0xA][0x02:0x10] = baii[0x00:0x0E]
             self.data[0xB][:0xE] = baii[0x00:0x0E]
@@ -316,10 +328,10 @@ class clustereeprom:
 
         logging.debug("Set immo ID to %s" % self.getImmoID())
 
-    def pair(self,ecueepromfile):
+    def pair(self, ecueepromfile):
         ecueeprombin = ecueeprom(readbin(ecueepromfile))
 
-        #Set Vin, Immo ID, Cluster Code
+        # Set Vin, Immo ID, Cluster Code
         self.setVIN(ecueeprombin.getVIN())
         self.setImmoID(ecueeprombin.getImmoID())
         self.setClusterCode(ecueeprombin.getClusterCode())
@@ -329,4 +341,3 @@ class clustereeprom:
         logging.info("Cluster updated to:")
         self.printStatus()
         self.write = True
-

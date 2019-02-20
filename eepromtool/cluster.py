@@ -15,6 +15,11 @@ class clustereeprom:
     immoid = ""
     skc = ""
     clustercode = "" #0x34-0x3A
+    clustertype = ""
+    clusterpartnumberstring = ""
+    mileage = ""
+    softcoding = ""
+    checksum = ""
 
 
     def __init__(self,ndata):
@@ -31,34 +36,92 @@ class clustereeprom:
             if len(page) > 16: logging.error("ERROR, long row: %d " % len(page))
             elif len(page) < 16: logging.error("ERROR, short row: %d " % len(page))
 
-        #get SKC
-        hexskc = "%0.2x%0.2x" % (self.data[0xC][0xD],self.data[0xC][0xC])
-        self.skc = "0%d" % int(hexskc,16)
-
         #get cluster code
         cc1 = self.data[0x7][0x2:0x9]
         cc2 = self.data[0x7][0xA:0x18]
         cc2.append(self.data[0x8][0x0])
         cc3 = self.data[0x8][0x2:0x9]
 
-        if cc1 != cc2:
-            logging.warn("WARNING: Cluster Code Block 1 and 2 do not match, this may indicate an error in the file, or a format not supported by this tool")
-        if cc1 != cc3:
-            logging.warn("WARNING: Cluster Code Block 1 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
-        if cc2 != cc3:
-            logging.warn("WARNING: Cluster Code Block 2 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
+        if self.size > 1024:
+            if self.data[0x2][0x0:0x2] == self.data[0x3][0x2:0x4]:
+                logging.info("Cluster Code Block match for R32 Cluster")
+                self.clustertype = 'R32'
 
+            if self.data[0x3][0x0:0x9] == self.data[0x43][0x0:0x9]:
+                logging.info("Cluster Code Block match for TT Cluster")
+                self.clustertype = '8N'
+        elif self.size < 1024:
+            self.clustertype='v1'
 
+        if self.clustertype == '':
+            if cc1 != cc2:
+                logging.warn("WARNING: Cluster Code Block 1 and 2 do not match, this may indicate an error in the file, or a format not supported by this tool")
+            if cc1 != cc3:
+                logging.warn("WARNING: Cluster Code Block 1 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
+            if cc2 != cc3:
+                logging.warn("WARNING: Cluster Code Block 2 and 3 do not match, this may indicate an error in the file, or a format not supported by this tool")
+        
         self.clustercode = ""
-        for i in range(0x2, 0x9):
-            self.clustercode += "%0.2X " % self.data[0x7][i]
+        if self.clustertype == '8N':
+            for i in range(0xb, 0xf):
+                self.clustercode += "%0.2X " % self.data[0x36][i]
+            for i in range(0x0, 0x2):
+                self.clustercode += "%0.2X " % self.data[0x37][i]
+        else:
+            for i in range(0x2, 0x9):
+                self.clustercode += "%0.2X " % self.data[0x7][i]
+
+        #get SKC
+        if self.clustertype == '8N':
+            hexskc = "%0.2x%0.2x" % (self.data[0x35][0xB],self.data[0x35][0xC])
+            self.skc = "0%d" % int(hexskc,16)
+        elif self.clustertype == 'R32':
+            hexskc = "%0.2x%0.2x" % (self.data[0x10][0xB],self.data[0x10][0xA])
+            self.skc = "0%d" % int(hexskc,16)
+        else:
+            hexskc = "%0.2x%0.2x" % (self.data[0xC][0xD],self.data[0xC][0xC])
+            self.skc = "0%d" % int(hexskc,16)
+        #get clusterpartnumber
+        clusterpartnumber = bytearray()
+        if self.clustertype == '8N':
+            for bite in range (0x0C,0x10):
+                clusterpartnumber.append(self.data[0x22][bite])
+            for bite in range (0x00,0x06):
+                clusterpartnumber.append(self.data[0x23][bite])
+        elif self.clustertype == 'R32':
+            for bite in range (0x0A,0x10):
+                clusterpartnumber.append(self.data[0x15][bite])
+            for bite in range (0x00,0x06):
+                clusterpartnumber.append(self.data[0x16][bite])
+        elif self.clustertype == 'v1':
+            for bite in range (0x00,0x3):
+                clusterpartnumber.append(self.data[0x8][bite])
+            for bite in bytearray(b"919"):
+                clusterpartnumber.append(bite)
+            for bite in range (0x03,0x10):
+                clusterpartnumber.append(self.data[0x8][bite])
+        else:
+            for bite in range (0x0A,0x10):
+                clusterpartnumber.append(self.data[0x15][bite])
+            for bite in range (0x00,0x06):
+                clusterpartnumber.append(self.data[0x16][bite])
+        try:
+            self.clusterpartnumberstring = clusterpartnumber.decode('ascii')
+        except:
+            logging.warn("WARNING: cannot decode Cluster Part number")
 
         #get VIN
         vinstring = bytearray()
-        for bite in range (0x02,0x10):
-            vinstring.append(self.data[0xD][bite])
-        for bite in range (0x00,0x03):
-            vinstring.append(self.data[0xE][bite])
+        if self.clustertype == '8N':
+            for bite in range (0x02,0x10):
+                vinstring.append(self.data[0xD][bite])
+            for bite in range (0x00,0x03):
+                vinstring.append(self.data[0xE][bite])
+        else:
+            for bite in range (0x02,0x10):
+                vinstring.append(self.data[0xD][bite])
+            for bite in range (0x00,0x03):
+                vinstring.append(self.data[0xE][bite])
         try:
             self.vin = vinstring.decode('ascii')
         except:
@@ -69,8 +132,14 @@ class clustereeprom:
 
         #get Immo ID
         immostring = bytearray()
-        for bite in range (0x02,0x0F):
-            immostring.append(self.data[0xA][bite])
+        if self.clustertype == '8N':
+            for bite in range (0x0D,0x0F):
+                immostring.append(self.data[0x35][bite])
+            for bite in range (0x00,0x0B):
+                immostring.append(self.data[0x36][bite])
+        else:
+            for bite in range (0x02,0x0F):
+                immostring.append(self.data[0xA][bite])
         try:
             self.immoid = immostring.decode('ascii')
         except:
@@ -100,10 +169,33 @@ class clustereeprom:
             logging.info("- VIN: %s (%s)" % (self.getVIN(),self.getVINDetail()))
         else:
             logging.info("- VIN: %s" % (self.getVIN()))
+        logging.info("- Size: " + self.getLength())
         logging.info("- SKC: " + self.getSKC())
         logging.info("- Cluster Code: " + self.getClusterCode())
         logging.info("- Immo ID: " + self.getImmoID())
+        logging.info("- Cluster Part number: " + self.getClusterPartNumber())
+        logging.info("- Checksum: " + self.getChecksum())
+        logging.info("- Mileage: " + self.getMileage())
+        logging.info("- SoftCoding ID: " + self.getSoftcoding())
         logging.info("")
+
+    def getChecksum(self):
+        if self.checksum == "":
+            return "Not currently supported"
+        else:
+            return self.checksum
+
+    def getMileage(self):
+        if self.mileage == "":
+            return "Not currently supported"
+        else:
+            return self.mileage
+
+    def getSoftcoding(self):
+        if self.softcoding == "":
+            return "Not currently supported"
+        else:
+            return self.softcoding
 
     def getLength(self):
         if self.size == 2048:
@@ -168,10 +260,14 @@ class clustereeprom:
         self.parse()
         self.write = True
 
-
+    def getClusterPartNumber(self):
+        return self.clusterpartnumberstring
 
     def getVIN(self):
-        return self.vin
+        if self.clustertype == '8N':
+            return "Not in EEPROM"
+        else:
+            return self.vin
 
     def getVINDetail(self):
         return self.vindetail
